@@ -12,7 +12,7 @@ import (
 	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/gogoproto/proto"
 	ics23 "github.com/cosmos/ics23/go"
-	ce "github.com/gonka-ai/gonka-utils/common_entity"
+	ce "github.com/gonka-ai/gonka-utils/go/common_entity"
 )
 
 type GetParticipantsFn = func(ctx context.Context, epoch string) (*ce.ActiveParticipantWithProof, error)

@@ -1,4 +1,4 @@
-module github.com/gonka-ai/gonka-utils
+module github.com/gonka-ai/gonka-utils/go
 
 go 1.24.5
 
