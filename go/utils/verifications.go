@@ -77,10 +77,10 @@ func VerifyParticipants(
 	for _, validator := range resp.Validators {
 		_, ok := genesisValidatorsData[validator.Address]
 		if !ok {
-			fmt.Printf("validator %s not found in genesis block\n", validator.Address)
+			return fmt.Errorf("validator %s not found in genesis block", validator.Address)
 		}
 	}
-	return fmt.Errorf("participants unverified: expected hash %s, but got %s", expectedAppHashHex, resp.Block.AppHash.String())
+	return nil
 }
 
 func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNplus1 map[string]string) (map[string]string, error) {
