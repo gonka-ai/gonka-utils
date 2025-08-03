@@ -9,17 +9,28 @@ import (
 	ed "github.com/cometbft/cometbft/crypto/ed25519"
 	cryptotypes "github.com/cometbft/cometbft/proto/tendermint/crypto"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/gogoproto/proto"
 	ics23 "github.com/cosmos/ics23/go"
 	ce "github.com/gonka-ai/gonka-utils/go/common_entity"
 )
 
-type GetParticipantsFn = func(ctx context.Context, epoch string) (*ce.ActiveParticipantWithProof, error)
+const genesisBlockHeight = int64(1)
 
-func VerifyParticipants(ctx context.Context, expectedHashHex string, fn GetParticipantsFn) error {
+type (
+	GetParticipantsFn = func(ctx context.Context, epoch string) (*ce.ActiveParticipantWithProof, error)
+	GetValidatorsFn   = func(ctx context.Context, height int64) (*coretypes.ResultValidators, error)
+	GetBlockFn        = func(ctx context.Context, height int64) (*coretypes.ResultBlock, error)
+)
+
+func VerifyParticipants(
+	ctx context.Context, expectedAppHashHex string,
+	getParticipants GetParticipantsFn,
+	getValidatorsFn GetValidatorsFn,
+	getBlockFn GetBlockFn) error {
 	var validatorsNplus1 map[string]string
-	resp, err := fn(ctx, "current")
+	resp, err := getParticipants(ctx, "current")
 	if err != nil {
 		return err
 	}
@@ -30,20 +41,46 @@ func VerifyParticipants(ctx context.Context, expectedHashHex string, fn GetParti
 			return err
 		}
 
+		if resp.Block.AppHash.String() == expectedAppHashHex {
+			return nil
+		}
+
 		epochId--
 		if epochId == 0 {
 			break
 		}
-		resp, err = fn(ctx, fmt.Sprintf("%d", epochId))
+		resp, err = getParticipants(ctx, fmt.Sprintf("%d", epochId))
 		if err != nil {
 			return err
 		}
 	}
 
-	if resp.Block.AppHash.String() == expectedHashHex {
-		return nil
+	genesisBlock, err := getBlockFn(ctx, genesisBlockHeight)
+	if err != nil {
+		return err
 	}
-	return fmt.Errorf("participants unverified: expected hash %s, but got %s", expectedHashHex, resp.Block.AppHash.String())
+
+	if genesisBlock.Block.AppHash.String() != expectedAppHashHex {
+		return fmt.Errorf("participants unverified: expected hash %s, but got %s", expectedAppHashHex, resp.Block.AppHash.String())
+	}
+
+	validators, err := getValidatorsFn(ctx, genesisBlockHeight)
+	if err != nil {
+		return err
+	}
+
+	genesisValidatorsData := make(map[string]struct{})
+	for _, validator := range validators.Validators {
+		genesisValidatorsData[validator.PubKey.Address().String()] = struct{}{}
+	}
+
+	for _, validator := range resp.Validators {
+		_, ok := genesisValidatorsData[validator.Address]
+		if !ok {
+			fmt.Printf("validator %s not found in genesis block\n", validator.Address)
+		}
+	}
+	return fmt.Errorf("participants unverified: expected hash %s, but got %s", expectedAppHashHex, resp.Block.AppHash.String())
 }
 
 func verifyParticipants(resp ce.ActiveParticipantWithProof, validatorsNplus1 map[string]string) (map[string]string, error) {
