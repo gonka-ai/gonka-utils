@@ -1,4 +1,4 @@
-package common_entity
+package contracts
 
 import (
 	cryptotypes "github.com/cometbft/cometbft/proto/tendermint/crypto"
@@ -44,4 +44,11 @@ type RandomSeed struct {
 	Participant string `protobuf:"bytes,1,opt,name=participant,proto3" json:"participant,omitempty"`
 	BlockHeight int64  `protobuf:"varint,2,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
 	Signature   string `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
+}
+
+type BlockValidators struct {
+	BlockHeight int64        `json:"block_height"`
+	Validators  []*Validator `json:"validators"`
+	Count       int          `json:"count"`
+	Total       int          `json:"total"`
 }

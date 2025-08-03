@@ -13,14 +13,14 @@ import (
 	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/gogoproto/proto"
 	ics23 "github.com/cosmos/ics23/go"
-	ce "github.com/gonka-ai/gonka-utils/go/common_entity"
+	"github.com/gonka-ai/gonka-utils/go/contracts"
 )
 
 const genesisBlockHeight = int64(1)
 
 type (
-	GetParticipantsFn = func(ctx context.Context, epoch string) (*ce.ActiveParticipantWithProof, error)
-	GetValidatorsFn   = func(ctx context.Context, height int64) (*coretypes.ResultValidators, error)
+	GetParticipantsFn = func(ctx context.Context, epoch string) (*contracts.ActiveParticipantWithProof, error)
+	GetValidatorsFn   = func(ctx context.Context, height int64) (*contracts.BlockValidators, error)
 	GetBlockFn        = func(ctx context.Context, height int64) (*coretypes.ResultBlock, error)
 )
 
@@ -71,7 +71,7 @@ func VerifyParticipants(
 
 	genesisValidatorsData := make(map[string]struct{})
 	for _, validator := range validators.Validators {
-		genesisValidatorsData[validator.PubKey.Address().String()] = struct{}{}
+		genesisValidatorsData[validator.PubKey] = struct{}{}
 	}
 
 	for _, validator := range resp.Validators {
@@ -83,7 +83,7 @@ func VerifyParticipants(
 	return fmt.Errorf("participants unverified: expected hash %s, but got %s", expectedAppHashHex, resp.Block.AppHash.String())
 }
 
-func verifyParticipants(resp ce.ActiveParticipantWithProof, validatorsNplus1 map[string]string) (map[string]string, error) {
+func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNplus1 map[string]string) (map[string]string, error) {
 	participantsN := make(map[string]struct{})
 	for _, participant := range resp.ActiveParticipants.Participants {
 		participantsN[participant.ValidatorKey] = struct{}{}
