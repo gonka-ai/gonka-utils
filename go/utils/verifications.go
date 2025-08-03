@@ -71,7 +71,7 @@ func VerifyParticipants(
 
 	genesisValidatorsData := make(map[string]struct{})
 	for _, validator := range validators.Validators {
-		genesisValidatorsData[validator.PubKey] = struct{}{}
+		genesisValidatorsData[validator.Address] = struct{}{}
 	}
 
 	for _, validator := range resp.Validators {
