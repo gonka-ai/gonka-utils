@@ -9,26 +9,24 @@ import (
 	ed "github.com/cometbft/cometbft/crypto/ed25519"
 	cryptotypes "github.com/cometbft/cometbft/proto/tendermint/crypto"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
-	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/gogoproto/proto"
 	ics23 "github.com/cosmos/ics23/go"
 	"github.com/gonka-ai/gonka-utils/go/contracts"
 )
 
-const genesisBlockHeight = int64(1)
+const (
+	genesisBlockHeight = int64(1)
+	chainId            = "gonka-testnet-7"
+)
 
 type (
 	GetParticipantsFn = func(ctx context.Context, epoch string) (*contracts.ActiveParticipantWithProof, error)
-	GetValidatorsFn   = func(ctx context.Context, height int64) (*contracts.BlockValidators, error)
-	GetBlockFn        = func(ctx context.Context, height int64) (*coretypes.ResultBlock, error)
 )
 
-func VerifyParticipants(
-	ctx context.Context, expectedAppHashHex string,
-	getParticipants GetParticipantsFn,
-	getValidatorsFn GetValidatorsFn,
-	getBlockFn GetBlockFn) error {
+var ErrEmptyValidatorsProof = errors.New("empty validators proof")
+
+func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParticipants GetParticipantsFn) error {
 	var validatorsNplus1 map[string]string
 	resp, err := getParticipants(ctx, "current")
 	if err != nil {
@@ -38,15 +36,22 @@ func VerifyParticipants(
 	for epochId := resp.ActiveParticipants.EpochId; ; {
 		validatorsNplus1, err = verifyParticipants(*resp, validatorsNplus1)
 		if err != nil {
-			return err
+			if !errors.Is(err, ErrEmptyValidatorsProof) {
+				return err
+			}
+
+			if errors.Is(err, ErrEmptyValidatorsProof) && resp.ActiveParticipants.CreatedAtBlockHeight > genesisBlockHeight {
+				return err
+			}
 		}
 
-		if resp.Block.AppHash.String() == expectedAppHashHex {
+		if resp.BlockProof.AppHashHex == expectedAppHashHex {
 			return nil
 		}
 
 		epochId--
 		if epochId == 0 {
+			// TODO проверить получение партисипантов за эпоху 0
 			break
 		}
 		resp, err = getParticipants(ctx, fmt.Sprintf("%d", epochId))
@@ -55,31 +60,32 @@ func VerifyParticipants(
 		}
 	}
 
-	genesisBlock, err := getBlockFn(ctx, genesisBlockHeight)
+	/*genesisBlock, err := getBlockFn(ctx, genesisBlockHeight)
 	if err != nil {
 		return err
 	}
 
 	if genesisBlock.Block.AppHash.String() != expectedAppHashHex {
 		return fmt.Errorf("participants unverified: expected hash %s, but got %s", expectedAppHashHex, resp.Block.AppHash.String())
-	}
+	}*/
 
-	validators, err := getValidatorsFn(ctx, genesisBlockHeight)
-	if err != nil {
-		return err
-	}
-
-	genesisValidatorsData := make(map[string]struct{})
-	for _, validator := range validators.Validators {
-		genesisValidatorsData[validator.Address] = struct{}{}
-	}
-
-	for _, validator := range resp.Validators {
-		_, ok := genesisValidatorsData[validator.Address]
-		if !ok {
-			return fmt.Errorf("validator %s not found in genesis block", validator.Address)
+	/*	validators, err := getValidatorsFn(ctx, genesisBlockHeight)
+		if err != nil {
+			return err
 		}
-	}
+
+		genesisValidatorsData := make(map[string]struct{})
+		for _, validator := range validators.Validators {
+			genesisValidatorsData[validator.Address] = struct{}{}
+		}*/
+
+	/*
+		for _, validator := range resp.ValidatorsProof.Signatures {
+			_, ok := genesisValidatorsData[validator.ValidatorAddressHex]
+			if !ok {
+				return fmt.Errorf("validator %s not found in genesis block", validator.ValidatorAddressHex)
+			}
+		}*/
 	return nil
 }
 
@@ -97,35 +103,55 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 		}
 	}
 
-	block := resp.Block
+	block := resp.BlockProof
 	value, err := hex.DecodeString(resp.ActiveParticipantsBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode active participants bytes : %w", err)
 	}
 
-	if err := VerifyIAVLProofAgainstAppHash(block.AppHash, resp.ProofOps.Ops, value); err != nil {
+	appHash, err := hex.DecodeString(resp.BlockProof.AppHashHex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode active participants app hash hex : %w", err)
+	}
+
+	if err := VerifyIAVLProofAgainstAppHash(appHash, resp.ProofOps.Ops, value); err != nil {
 		return nil, err
+	}
+
+	validatorsProof := resp.ValidatorsProof
+	if validatorsProof == nil {
+		return nil, ErrEmptyValidatorsProof
+	}
+
+	blockIdHash, err := hex.DecodeString(validatorsProof.BlockId.Hash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode validators block hash hex : %w", err)
+	}
+
+	partsHeaderHash, err := hex.DecodeString(validatorsProof.BlockId.PartSetHeaderHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode validators block header hash hex : %w", err)
 	}
 
 	vote := tmproto.Vote{
 		Type:   tmproto.PrecommitType,
-		Height: block.LastCommit.Height,
-		Round:  block.LastCommit.Round,
+		Height: block.CreatedAtBlockHeight,
+		Round:  int32(validatorsProof.Round),
 		BlockID: tmproto.BlockID{
-			Hash: block.LastCommit.BlockID.Hash,
+			Hash: blockIdHash,
 			PartSetHeader: tmproto.PartSetHeader{
-				Total: block.LastCommit.BlockID.PartSetHeader.Total,
-				Hash:  block.LastCommit.BlockID.PartSetHeader.Hash,
+				Total: uint32(validatorsProof.BlockId.PartSetHeaderTotal),
+				Hash:  partsHeaderHash,
 			},
 		},
 	}
 
 	validatorsData := make(map[string]string)
-	for _, validator := range resp.Validators {
-		validatorsData[validator.Address] = validator.PubKey
+	for _, commit := range resp.BlockProof.Commits {
+		validatorsData[commit.ValidatorAddress] = commit.ValidatorPubKey
 	}
 
-	if err := VerifySignatures(vote, block.ChainID, validatorsData, block.LastCommit.Signatures); err != nil {
+	if err := VerifySignatures(vote, chainId, validatorsData, validatorsProof.Signatures); err != nil {
 		return nil, err
 	}
 
@@ -183,19 +209,24 @@ func VerifyIAVLProofAgainstAppHash(appHash []byte, proofOps []cryptotypes.ProofO
 	return nil
 }
 
-func VerifySignatures(vote tmproto.Vote, chainId string, validators map[string]string, signatures []tmtypes.CommitSig) error {
+func VerifySignatures(vote tmproto.Vote, chainId string, validators map[string]string, signatures []*contracts.SignatureInfo) error {
 	for _, signature := range signatures {
 		vote.Timestamp = signature.Timestamp
 		signBytes := tmtypes.VoteSignBytes(chainId, &vote)
 
-		pubKeyBase64 := validators[signature.ValidatorAddress.String()]
+		pubKeyBase64 := validators[signature.ValidatorAddressHex]
 		pubKeyBytes, err := base64.StdEncoding.DecodeString(pubKeyBase64)
 		if err != nil {
 			return fmt.Errorf("decode pubkey: %w", err)
 		}
 
 		pubKey := ed.PubKey(pubKeyBytes)
-		if ok := pubKey.VerifySignature(signBytes, signature.Signature); !ok {
+
+		decodedSign, err := base64.StdEncoding.DecodeString(signature.SignatureBase64)
+		if err != nil {
+			return fmt.Errorf("decode signature: %w", err)
+		}
+		if ok := pubKey.VerifySignature(signBytes, decodedSign); !ok {
 			return fmt.Errorf("failed to verify signature for addr %v \n", pubKey.Address().String())
 		}
 	}

@@ -2,7 +2,7 @@ package contracts
 
 import (
 	cryptotypes "github.com/cometbft/cometbft/proto/tendermint/crypto"
-	comettypes "github.com/cometbft/cometbft/types"
+	"time"
 )
 
 type ActiveParticipantWithProof struct {
@@ -10,18 +10,42 @@ type ActiveParticipantWithProof struct {
 	Addresses               []string              `json:"addresses"`
 	ActiveParticipantsBytes string                `json:"active_participants_bytes"`
 	ProofOps                *cryptotypes.ProofOps `json:"proof_ops"`
-	Validators              []*Validator          `json:"validators"`
-	Block                   *comettypes.Block     `json:"block"`
+	BlockProof              *BlockProof           `json:"block_proof"`
+	ValidatorsProof         *ValidatorsProof      `json:"validators_proof"`
 }
 
-type Validator struct {
-	Address          string `json:"address"`
-	PubKey           string `json:"pub_key"`
-	VotingPower      int64  `json:"voting_power"`
-	ProposerPriority int64  `json:"proposer_priority"`
+type ValidatorsProof struct {
+	BlockHeight int64            `json:"block_height,omitempty"`
+	Round       int64            `json:"round,omitempty"`
+	BlockId     *BlockID         `json:"block_id,omitempty"`
+	Signatures  []*SignatureInfo `json:"signatures,omitempty"`
 }
 
-// TODO: import as dependency from inference-chain
+type BlockID struct {
+	Hash               string `json:"hash,omitempty"`
+	PartSetHeaderTotal int64  `json:"part_set_header_total,omitempty"`
+	PartSetHeaderHash  string `json:"part_set_header_hash,omitempty"`
+}
+
+type SignatureInfo struct {
+	SignatureBase64     string    `json:"signature_base64,omitempty"`
+	ValidatorAddressHex string    `json:"validator_address_hex,omitempty"`
+	Timestamp           time.Time `json:"timestamp"`
+}
+
+type BlockProof struct {
+	CreatedAtBlockHeight int64         `json:"created_at_block_height,omitempty"`
+	AppHashHex           string        `json:"app_hash_hex,omitempty"`
+	TotalVotingPower     int64         `json:"total_voting_power,omitempty"`
+	Commits              []*CommitInfo `json:"commits,omitempty"`
+}
+
+type CommitInfo struct {
+	ValidatorAddress string `json:"validator_address,omitempty"`
+	ValidatorPubKey  string `json:"validator_pub_key,omitempty"`
+	VotingPower      int64  `json:"voting_power,omitempty"`
+}
+
 type ActiveParticipants struct {
 	Participants         []*ActiveParticipant `protobuf:"bytes,1,rep,name=participants,proto3" json:"participants,omitempty"`
 	EpochGroupId         uint64               `protobuf:"varint,2,opt,name=epoch_group_id,json=epochGroupId,proto3" json:"epoch_group_id,omitempty"`
@@ -46,9 +70,11 @@ type RandomSeed struct {
 	Signature   string `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 }
 
+/*
 type BlockValidators struct {
 	BlockHeight int64        `json:"block_height"`
 	Validators  []*Validator `json:"validators"`
 	Count       int          `json:"count"`
 	Total       int          `json:"total"`
 }
+*/
