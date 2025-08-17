@@ -16,15 +16,17 @@ import (
 )
 
 const (
-	genesisBlockHeight = int64(1)
-	chainId            = "gonka-testnet-7"
+	chainId = "gonka-testnet-7"
 )
 
 type (
 	GetParticipantsFn = func(ctx context.Context, epoch string) (*contracts.ActiveParticipantWithProof, error)
 )
 
-var ErrEmptyValidatorsProof = errors.New("empty validators proof")
+var (
+	ErrEmptyValidatorsProof   = errors.New("empty validators proof")
+	ErrParticipantsUnverified = errors.New("participants unverified")
+)
 
 func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParticipants GetParticipantsFn) error {
 	var validatorsNplus1 map[string]string
@@ -47,6 +49,10 @@ func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParti
 		if err != nil {
 			return err
 		}
+	}
+
+	if resp.BlockProof.AppHashHex != expectedAppHashHex {
+		return ErrParticipantsUnverified
 	}
 	return nil
 }
