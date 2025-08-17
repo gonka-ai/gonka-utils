@@ -69,8 +69,10 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 		return nil, fmt.Errorf("failed to decode active participants app hash hex : %w", err)
 	}
 
-	if err := VerifyIAVLProofAgainstAppHash(appHash, resp.ProofOps.Ops, value); err != nil {
-		return nil, err
+	if resp.ProofOps != nil {
+		if err := VerifyIAVLProofAgainstAppHash(appHash, resp.ProofOps.Ops, value); err != nil {
+			return nil, err
+		}
 	}
 
 	validatorsProof := resp.ValidatorsProof
