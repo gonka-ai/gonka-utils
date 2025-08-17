@@ -103,11 +103,6 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 		return nil, fmt.Errorf("failed to decode validators block header hash hex : %w", err)
 	}
 
-	indx := int32(0)
-	if resp.ActiveParticipants.CreatedAtBlockHeight == 1 {
-		indx = 1
-	}
-
 	vote := tmproto.Vote{
 		Type:   tmproto.PrecommitType,
 		Height: block.CreatedAtBlockHeight,
@@ -119,7 +114,6 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 				Hash:  partsHeaderHash,
 			},
 		},
-		ValidatorIndex: indx,
 	}
 
 	validatorsData := make(map[string]string)
@@ -197,6 +191,7 @@ func VerifySignatures(vote tmproto.Vote, chainId string, validators map[string]s
 		}
 
 		pubKey := ed.PubKey(pubKeyBytes)
+		vote.ValidatorAddress = pubKey.Address().Bytes()
 
 		decodedSign, err := base64.StdEncoding.DecodeString(signature.SignatureBase64)
 		if err != nil {
