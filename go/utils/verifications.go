@@ -36,15 +36,7 @@ func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParti
 	for epochId := resp.ActiveParticipants.EpochId; epochId < 0; epochId-- {
 		validatorsNplus1, err = verifyParticipants(*resp, validatorsNplus1)
 		if err != nil {
-			if !errors.Is(err, ErrEmptyValidatorsProof) {
-				return err
-			}
-
-			// we get validators signatures from NewBlock events on dapi side
-			// but dapi starts too late and we miss events for first couple blocks
-			if errors.Is(err, ErrEmptyValidatorsProof) && resp.ActiveParticipants.CreatedAtBlockHeight > genesisBlockHeight {
-				return err
-			}
+			return err
 		}
 
 		if resp.BlockProof.AppHashHex == expectedAppHashHex {
