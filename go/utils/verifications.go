@@ -33,13 +33,15 @@ func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParti
 		return err
 	}
 
-	for epochId := resp.ActiveParticipants.EpochId; ; {
+	for epochId := resp.ActiveParticipants.EpochId; epochId < 0; epochId-- {
 		validatorsNplus1, err = verifyParticipants(*resp, validatorsNplus1)
 		if err != nil {
 			if !errors.Is(err, ErrEmptyValidatorsProof) {
 				return err
 			}
 
+			// we get validators signatures from NewBlock events on dapi side
+			// but dapi starts too late and we miss events for first couple blocks
 			if errors.Is(err, ErrEmptyValidatorsProof) && resp.ActiveParticipants.CreatedAtBlockHeight > genesisBlockHeight {
 				return err
 			}
@@ -49,60 +51,15 @@ func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParti
 			return nil
 		}
 
-		epochId--
-		if epochId == 0 {
-			// TODO проверить получение партисипантов за эпоху 0
-			break
-		}
 		resp, err = getParticipants(ctx, fmt.Sprintf("%d", epochId))
 		if err != nil {
 			return err
 		}
 	}
-
-	/*genesisBlock, err := getBlockFn(ctx, genesisBlockHeight)
-	if err != nil {
-		return err
-	}
-
-	if genesisBlock.Block.AppHash.String() != expectedAppHashHex {
-		return fmt.Errorf("participants unverified: expected hash %s, but got %s", expectedAppHashHex, resp.Block.AppHash.String())
-	}*/
-
-	/*	validators, err := getValidatorsFn(ctx, genesisBlockHeight)
-		if err != nil {
-			return err
-		}
-
-		genesisValidatorsData := make(map[string]struct{})
-		for _, validator := range validators.Validators {
-			genesisValidatorsData[validator.Address] = struct{}{}
-		}*/
-
-	/*
-		for _, validator := range resp.ValidatorsProof.Signatures {
-			_, ok := genesisValidatorsData[validator.ValidatorAddressHex]
-			if !ok {
-				return fmt.Errorf("validator %s not found in genesis block", validator.ValidatorAddressHex)
-			}
-		}*/
 	return nil
 }
 
 func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNplus1 map[string]string) (map[string]string, error) {
-	participantsN := make(map[string]struct{})
-	for _, participant := range resp.ActiveParticipants.Participants {
-		participantsN[participant.ValidatorKey] = struct{}{}
-	}
-
-	if len(validatorsNplus1) != 0 {
-		for _, pubkey := range validatorsNplus1 {
-			if _, ok := participantsN[pubkey]; !ok {
-				return nil, errors.New("validator not found in previous epoch active participants set")
-			}
-		}
-	}
-
 	block := resp.BlockProof
 	value, err := hex.DecodeString(resp.ActiveParticipantsBytes)
 	if err != nil {
@@ -121,6 +78,19 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 	validatorsProof := resp.ValidatorsProof
 	if validatorsProof == nil {
 		return nil, ErrEmptyValidatorsProof
+	}
+
+	participantsN := make(map[string]struct{})
+	for _, participant := range resp.ActiveParticipants.Participants {
+		participantsN[participant.ValidatorKey] = struct{}{}
+	}
+
+	if len(validatorsNplus1) != 0 {
+		for _, pubkey := range validatorsNplus1 {
+			if _, ok := participantsN[pubkey]; !ok {
+				return nil, errors.New("validator not found in previous epoch active participants set")
+			}
+		}
 	}
 
 	blockIdHash, err := hex.DecodeString(validatorsProof.BlockId.Hash)
