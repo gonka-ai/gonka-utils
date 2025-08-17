@@ -35,7 +35,7 @@ func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParti
 		return err
 	}
 
-	for epochId := resp.ActiveParticipants.EpochId; epochId < 0; epochId-- {
+	for epochId := resp.ActiveParticipants.EpochId; epochId >= 0; epochId-- {
 		validatorsNplus1, err = verifyParticipants(*resp, validatorsNplus1)
 		if err != nil {
 			return err
