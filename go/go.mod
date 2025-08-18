@@ -1,6 +1,8 @@
 module github.com/gonka-ai/gonka-utils/go
 
-go 1.24.5
+go 1.23.2
+
+toolchain go1.24.2
 
 require (
 	github.com/cometbft/cometbft v0.38.17
