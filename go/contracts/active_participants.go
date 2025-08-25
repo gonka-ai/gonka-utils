@@ -1,8 +1,9 @@
 package contracts
 
 import (
-	cryptotypes "github.com/cometbft/cometbft/proto/tendermint/crypto"
 	"time"
+
+	cryptotypes "github.com/cometbft/cometbft/proto/tendermint/crypto"
 )
 
 type ActiveParticipantWithProof struct {
@@ -66,7 +67,7 @@ type ActiveParticipant struct {
 
 type RandomSeed struct {
 	Participant string `protobuf:"bytes,1,opt,name=participant,proto3" json:"participant,omitempty"`
-	BlockHeight int64  `protobuf:"varint,2,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
+	EpochIndex  uint64 `protobuf:"varint,2,opt,name=epoch_index,json=epochIndex,proto3" json:"epoch_index,omitempty"`
 	Signature   string `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 }
 
