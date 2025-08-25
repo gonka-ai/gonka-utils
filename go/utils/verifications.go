@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	chainId = "gonka-testnet-7"
+	chainId = "gonka-mainnet"
 )
 
 type (
@@ -70,7 +70,7 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 	}
 
 	if resp.ProofOps != nil {
-		if err := VerifyIAVLProofAgainstAppHash(appHash, resp.ProofOps.Ops, value); err != nil {
+		if err := VerifyIAVLProofAgainstAppHash(resp.ActiveParticipants.CreatedAtBlockHeight, appHash, resp.ProofOps.Ops, value); err != nil {
 			return nil, err
 		}
 	}
@@ -141,9 +141,12 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 //   - then verifies that the storeRoot is included in the block’s AppHash;
 //   - if both checks succeed, the value is guaranteed to be part of the application state
 //     signed by validators at the given block height.
-func VerifyIAVLProofAgainstAppHash(appHash []byte, proofOps []cryptotypes.ProofOp, value []byte) error {
+func VerifyIAVLProofAgainstAppHash(height int64, appHash []byte, proofOps []cryptotypes.ProofOp, value []byte) error {
 	if len(proofOps) != 2 {
-		return fmt.Errorf("expected 2 proof ops, got %d", len(proofOps))
+		if height != 1 {
+			return fmt.Errorf("expected 2 proof ops, got %d", len(proofOps))
+		}
+		return nil
 	}
 
 	// Step 1: key → value в store (IAVL)
