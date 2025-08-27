@@ -13,6 +13,7 @@ type ActiveParticipantWithProof struct {
 	ProofOps                *cryptotypes.ProofOps `json:"proof_ops"`
 	BlockProof              *BlockProof           `json:"block_proof"`
 	ValidatorsProof         *ValidatorsProof      `json:"validators_proof"`
+	ChainId                 string                `json:"chain_id"`
 }
 
 type ValidatorsProof struct {

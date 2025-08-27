@@ -15,12 +15,9 @@ import (
 	"github.com/gonka-ai/gonka-utils/go/contracts"
 )
 
-const (
-	chainId = "gonka-mainnet"
-)
-
 type (
 	GetParticipantsFn = func(ctx context.Context, epoch string) (*contracts.ActiveParticipantWithProof, error)
+	ValidatorsInfo    = map[string]string
 )
 
 var (
@@ -58,7 +55,6 @@ func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParti
 }
 
 func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNplus1 map[string]string) (map[string]string, error) {
-	block := resp.BlockProof
 	value, err := hex.DecodeString(resp.ActiveParticipantsBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode active participants bytes : %w", err)
@@ -75,8 +71,7 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 		}
 	}
 
-	validatorsProof := resp.ValidatorsProof
-	if validatorsProof == nil {
+	if resp.ValidatorsProof == nil {
 		return nil, ErrEmptyValidatorsProof
 	}
 
@@ -93,38 +88,14 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 		}
 	}
 
-	blockIdHash, err := hex.DecodeString(validatorsProof.BlockId.Hash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode validators block hash hex : %w", err)
-	}
-
-	partsHeaderHash, err := hex.DecodeString(validatorsProof.BlockId.PartSetHeaderHash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode validators block header hash hex : %w", err)
-	}
-
-	vote := tmproto.Vote{
-		Type:   tmproto.PrecommitType,
-		Height: block.CreatedAtBlockHeight,
-		Round:  int32(validatorsProof.Round),
-		BlockID: tmproto.BlockID{
-			Hash: blockIdHash,
-			PartSetHeader: tmproto.PartSetHeader{
-				Total: uint32(validatorsProof.BlockId.PartSetHeaderTotal),
-				Hash:  partsHeaderHash,
-			},
-		},
-	}
-
 	validatorsData := make(map[string]string)
 	for _, commit := range resp.BlockProof.Commits {
 		validatorsData[commit.ValidatorAddress] = commit.ValidatorPubKey
 	}
 
-	if err := VerifySignatures(vote, chainId, validatorsData, validatorsProof.Signatures); err != nil {
+	if err := VerifySignatures(*resp.ValidatorsProof, resp.ChainId, validatorsData); err != nil {
 		return nil, err
 	}
-
 	return validatorsData, nil
 }
 
@@ -182,8 +153,31 @@ func VerifyIAVLProofAgainstAppHash(height int64, appHash []byte, proofOps []cryp
 	return nil
 }
 
-func VerifySignatures(vote tmproto.Vote, chainId string, validators map[string]string, signatures []*contracts.SignatureInfo) error {
-	for _, signature := range signatures {
+func VerifySignatures(validatorsProof contracts.ValidatorsProof, chainId string, validators ValidatorsInfo) error {
+	blockIdHash, err := hex.DecodeString(validatorsProof.BlockId.Hash)
+	if err != nil {
+		return fmt.Errorf("failed to decode validators block hash hex : %w", err)
+	}
+
+	partsHeaderHash, err := hex.DecodeString(validatorsProof.BlockId.PartSetHeaderHash)
+	if err != nil {
+		return fmt.Errorf("failed to decode validators block header hash hex : %w", err)
+	}
+
+	vote := tmproto.Vote{
+		Type:   tmproto.PrecommitType,
+		Height: validatorsProof.BlockHeight,
+		Round:  int32(validatorsProof.Round),
+		BlockID: tmproto.BlockID{
+			Hash: blockIdHash,
+			PartSetHeader: tmproto.PartSetHeader{
+				Total: uint32(validatorsProof.BlockId.PartSetHeaderTotal),
+				Hash:  partsHeaderHash,
+			},
+		},
+	}
+
+	for _, signature := range validatorsProof.Signatures {
 		vote.Timestamp = signature.Timestamp
 		signBytes := tmtypes.VoteSignBytes(chainId, &vote)
 
