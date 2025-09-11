@@ -25,9 +25,9 @@ var (
 	ErrParticipantsUnverified = errors.New("participants unverified")
 )
 
-func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParticipants GetParticipantsFn) error {
+func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParticipants GetParticipantsFn, epoch string) error {
 	var validatorsNplus1 map[string]string
-	resp, err := getParticipants(ctx, "current")
+	resp, err := getParticipants(ctx, epoch)
 	if err != nil {
 		return err
 	}
