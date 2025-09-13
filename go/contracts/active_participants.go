@@ -58,25 +58,28 @@ type ActiveParticipants struct {
 }
 
 type ActiveParticipant struct {
-	Index        string      `json:"index,omitempty"`
-	ValidatorKey string      `json:"validator_key,omitempty"`
-	Weight       int64       `json:"weight,omitempty"`
-	InferenceUrl string      `json:"inference_url,omitempty"`
-	Models       []string    `json:"models,omitempty"`
-	Seed         *RandomSeed `json:"seed,omitempty"`
+	Index        string          `json:"index,omitempty"`
+	ValidatorKey string          `json:"validator_key,omitempty"`
+	Weight       int64           `json:"weight,omitempty"`
+	InferenceUrl string          `json:"inference_url,omitempty"`
+	Models       []string        `json:"models,omitempty"`
+	Seed         *RandomSeed     `json:"seed,omitempty"`
+	MlNodes      []*ModelMLNodes `json:"ml_nodes,omitempty"`
 }
 
 type RandomSeed struct {
-	Participant string `protobuf:"bytes,1,opt,name=participant,proto3" json:"participant,omitempty"`
-	EpochIndex  uint64 `protobuf:"varint,2,opt,name=epoch_index,json=epochIndex,proto3" json:"epoch_index,omitempty"`
-	Signature   string `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
+	Participant string `json:"participant,omitempty"`
+	EpochIndex  uint64 `json:"epoch_index,omitempty"`
+	Signature   string `json:"signature,omitempty"`
 }
 
-/*
-type BlockValidators struct {
-	BlockHeight int64        `json:"block_height"`
-	Validators  []*Validator `json:"validators"`
-	Count       int          `json:"count"`
-	Total       int          `json:"total"`
+type ModelMLNodes struct {
+	MlNodes []*MLNodeInfo `json:"ml_nodes,omitempty"`
 }
-*/
+
+type MLNodeInfo struct {
+	NodeId             string `json:"node_id,omitempty"`
+	Throughput         int64  `json:"throughput,omitempty"`
+	PocWeight          int64  `json:"poc_weight,omitempty"`
+	TimeslotAllocation []bool `json:"timeslot_allocation,omitempty"`
+}
