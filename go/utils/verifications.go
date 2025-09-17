@@ -77,12 +77,12 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 
 	participantsN := make(map[string]struct{})
 	for _, participant := range resp.ActiveParticipants.Participants {
-		participantsN[strings.ToUpper(participant.ValidatorKey)] = struct{}{}
+		participantsN[participant.ValidatorKey] = struct{}{}
 	}
 
 	if len(validatorsNplus1) != 0 {
 		for _, pubkey := range validatorsNplus1 {
-			if _, ok := participantsN[strings.ToUpper(pubkey)]; !ok {
+			if _, ok := participantsN[pubkey]; !ok {
 				return nil, errors.New("validator not found in previous epoch active participants set")
 			}
 		}
@@ -90,7 +90,7 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 
 	validatorsData := make(map[string]string)
 	for _, commit := range resp.BlockProof.Commits {
-		validatorsData[strings.ToUpper(commit.ValidatorAddress)] = strings.ToUpper(commit.ValidatorPubKey)
+		validatorsData[strings.ToUpper(commit.ValidatorAddress)] = commit.ValidatorPubKey // public key is case-sensitive,
 	}
 
 	if err := VerifySignatures(*resp.ValidatorsProof, resp.ChainId, validatorsData); err != nil {
