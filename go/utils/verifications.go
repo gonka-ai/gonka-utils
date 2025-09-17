@@ -13,6 +13,7 @@ import (
 	"github.com/cosmos/gogoproto/proto"
 	ics23 "github.com/cosmos/ics23/go"
 	"github.com/gonka-ai/gonka-utils/go/contracts"
+	"strings"
 )
 
 type (
@@ -38,7 +39,7 @@ func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParti
 			return err
 		}
 
-		if resp.BlockProof.AppHashHex == expectedAppHashHex {
+		if strings.ToUpper(resp.BlockProof.AppHashHex) == strings.ToUpper(expectedAppHashHex) {
 			return nil
 		}
 
@@ -47,8 +48,7 @@ func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParti
 			return err
 		}
 	}
-
-	if resp.BlockProof.AppHashHex != expectedAppHashHex {
+	if strings.ToUpper(resp.BlockProof.AppHashHex) != strings.ToUpper(expectedAppHashHex) {
 		return ErrParticipantsUnverified
 	}
 	return nil
@@ -77,12 +77,12 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 
 	participantsN := make(map[string]struct{})
 	for _, participant := range resp.ActiveParticipants.Participants {
-		participantsN[participant.ValidatorKey] = struct{}{}
+		participantsN[strings.ToUpper(participant.ValidatorKey)] = struct{}{}
 	}
 
 	if len(validatorsNplus1) != 0 {
 		for _, pubkey := range validatorsNplus1 {
-			if _, ok := participantsN[pubkey]; !ok {
+			if _, ok := participantsN[strings.ToUpper(pubkey)]; !ok {
 				return nil, errors.New("validator not found in previous epoch active participants set")
 			}
 		}
@@ -90,7 +90,7 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 
 	validatorsData := make(map[string]string)
 	for _, commit := range resp.BlockProof.Commits {
-		validatorsData[commit.ValidatorAddress] = commit.ValidatorPubKey
+		validatorsData[strings.ToUpper(commit.ValidatorAddress)] = strings.ToUpper(commit.ValidatorPubKey)
 	}
 
 	if err := VerifySignatures(*resp.ValidatorsProof, resp.ChainId, validatorsData); err != nil {
