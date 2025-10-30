@@ -181,7 +181,11 @@ func VerifySignatures(validatorsProof contracts.ValidatorsProof, chainId string,
 		vote.Timestamp = signature.Timestamp
 		signBytes := tmtypes.VoteSignBytes(chainId, &vote)
 
-		pubKeyBase64 := validators[signature.ValidatorAddressHex]
+		pubKeyBase64, ok := validators[signature.ValidatorAddressHex]
+		if !ok {
+			return fmt.Errorf("no pubkey known for validator %v", signature.ValidatorAddressHex)
+		}
+
 		pubKeyBytes, err := base64.StdEncoding.DecodeString(pubKeyBase64)
 		if err != nil {
 			return fmt.Errorf("decode pubkey: %w", err)
@@ -195,7 +199,7 @@ func VerifySignatures(validatorsProof contracts.ValidatorsProof, chainId string,
 			return fmt.Errorf("decode signature: %w", err)
 		}
 		if ok := pubKey.VerifySignature(signBytes, decodedSign); !ok {
-			return fmt.Errorf("failed to verify signature for addr %v \n", pubKey.Address().String())
+			return fmt.Errorf("failed to verify signature for addr %v", pubKey.Address().String())
 		}
 	}
 	return nil
