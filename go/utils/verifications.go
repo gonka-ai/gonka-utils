@@ -120,7 +120,7 @@ func VerifyIAVLProofAgainstAppHash(height int64, appHash []byte, proofOps []cryp
 		return nil
 	}
 
-	// Step 1: key → value в store (IAVL)
+	// Step 1: key → value in store (IAVL)
 	iavlOp := proofOps[0]
 	if iavlOp.Type != "ics23:iavl" {
 		return fmt.Errorf("unexpected first proof op type: %s", iavlOp.Type)
