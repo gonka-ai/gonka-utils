@@ -54,7 +54,7 @@ func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParti
 	return nil
 }
 
-func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNplus1 map[string]string) (map[string]string, error) {
+func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNplus1 map[string]*contracts.CommitInfo) (map[string]string, error) {
 	value, err := hex.DecodeString(resp.ActiveParticipantsBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode active participants bytes : %w", err)
@@ -75,22 +75,29 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 		return nil, ErrEmptyValidatorsProof
 	}
 
+	// participants in epoch N are validators, which signed block, where were created participants for N +1
+	// we shouldn't have scenario, when node signed block, but wasn't participant
 	participantsN := make(map[string]struct{})
 	for _, participant := range resp.ActiveParticipants.Participants {
 		participantsN[participant.ValidatorKey] = struct{}{}
 	}
 
-	if len(validatorsNplus1) != 0 {
-		for _, pubkey := range validatorsNplus1 {
-			if _, ok := participantsN[pubkey]; !ok {
-				return nil, errors.New("validator not found in previous epoch active participants set")
-			}
-		}
+	var totalVotingPowerEpochN int64
+	validatorsData := make(map[string]*contracts.CommitInfo)
+	for _, commit := range resp.BlockProof.Commits {
+		validatorsData[strings.ToUpper(commit.ValidatorAddress)] = commit // public key is case-sensitive,
+		totalVotingPowerEpochN += commit.VotingPower
 	}
 
-	validatorsData := make(map[string]string)
-	for _, commit := range resp.BlockProof.Commits {
-		validatorsData[strings.ToUpper(commit.ValidatorAddress)] = commit.ValidatorPubKey // public key is case-sensitive,
+	var totalVotingPowerEpochNpus1 int64
+	for valAddress, commitInfo := range validatorsNplus1 {
+		_, ok := participantsN[commitInfo.ValidatorPubKey]
+		if !ok {
+			// participants in epoch N are validators, which signed block, where were created participants for N +1
+			// even if they missed POC, they keep signing blocks till next epoch
+			// we shouldn't have scenario, when node signed block with participants set for NEXT epoch, but wasn't participant for CURRENT
+			return nil, errors.New("validator not found in previous epoch active participants set")
+		}
 	}
 
 	if err := VerifySignatures(*resp.ValidatorsProof, resp.ChainId, validatorsData); err != nil {
