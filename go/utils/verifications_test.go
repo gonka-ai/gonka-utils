@@ -40,8 +40,14 @@ func TestVerifySignatures(t *testing.T) {
 
 	// address hex -> pubkey (base64)
 	validators := ValidatorsInfo{
-		"13CCD46D7FF3BB4945A2FBC450A948B5A1C89EB9": "LLqBxOz+vD3p7sQsdEhBfrFH2QFMjy3fMasB9yBGSqs=",
-		"DF04B29653F664BDAC7DE851D52BDD5C8E205822": "5QYFI0kdyBPrcld3FfOwoZdynfwN5li0qUbg3zwFK4I=",
+		"13CCD46D7FF3BB4945A2FBC450A948B5A1C89EB9": &contracts.CommitInfo{
+			ValidatorPubKey: "LLqBxOz+vD3p7sQsdEhBfrFH2QFMjy3fMasB9yBGSqs=",
+			VotingPower:     10,
+		},
+		"DF04B29653F664BDAC7DE851D52BDD5C8E205822": &contracts.CommitInfo{
+			ValidatorPubKey: "5QYFI0kdyBPrcld3FfOwoZdynfwN5li0qUbg3zwFK4I=",
+			VotingPower:     12,
+		},
 	}
 
 	err = VerifySignatures(proof, chainID, validators)
