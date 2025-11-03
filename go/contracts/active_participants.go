@@ -38,7 +38,8 @@ type SignatureInfo struct {
 type BlockProof struct {
 	CreatedAtBlockHeight int64         `json:"created_at_block_height,omitempty"`
 	AppHashHex           string        `json:"app_hash_hex,omitempty"`
-	TotalVotingPower     int64         `json:"total_voting_power,omitempty"`
+	TotalPower           int64         `json:"total_power,omitempty"`
+	TotalVotedPower      int64         `json:"total_voted_power,omitempty"`
 	Commits              []*CommitInfo `json:"commits,omitempty"`
 }
 

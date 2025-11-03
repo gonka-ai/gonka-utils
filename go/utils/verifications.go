@@ -18,7 +18,7 @@ import (
 
 type (
 	GetParticipantsFn = func(ctx context.Context, epoch string) (*contracts.ActiveParticipantWithProof, error)
-	ValidatorsInfo    = map[string]string
+	ValidatorsInfo    = map[string]*contracts.CommitInfo
 )
 
 var (
@@ -27,14 +27,19 @@ var (
 )
 
 func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParticipants GetParticipantsFn, epoch string) error {
-	var validatorsNplus1 map[string]string
+	var (
+		validatorsNplus1                map[string]*contracts.CommitInfo
+		totalvalidatorsPowerNplus1      int64
+		totalVotedValidatorsPowerNplus1 int64
+	)
 	resp, err := getParticipants(ctx, epoch)
 	if err != nil {
 		return err
 	}
 
 	for epochId := int64(resp.ActiveParticipants.EpochId - 1); epochId >= 0; epochId-- {
-		validatorsNplus1, err = verifyParticipants(*resp, validatorsNplus1)
+		validatorsNplus1, totalvalidatorsPowerNplus1, totalVotedValidatorsPowerNplus1, err =
+			verifyParticipants(*resp, validatorsNplus1, totalvalidatorsPowerNplus1, totalVotedValidatorsPowerNplus1)
 		if err != nil {
 			return err
 		}
@@ -54,25 +59,28 @@ func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParti
 	return nil
 }
 
-func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNplus1 map[string]string) (map[string]string, error) {
+func verifyParticipants(
+	resp contracts.ActiveParticipantWithProof,
+	validatorsNplus1 map[string]*contracts.CommitInfo,
+	totalPowerNPlus1, totalVotedPower int64) (map[string]*contracts.CommitInfo, int64, int64, error) {
 	value, err := hex.DecodeString(resp.ActiveParticipantsBytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode active participants bytes : %w", err)
+		return nil, 0, 0, fmt.Errorf("failed to decode active participants bytes : %w", err)
 	}
 
 	appHash, err := hex.DecodeString(resp.BlockProof.AppHashHex)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode active participants app hash hex : %w", err)
+		return nil, 0, 0, fmt.Errorf("failed to decode active participants app hash hex : %w", err)
 	}
 
 	if resp.ProofOps != nil {
 		if err := VerifyIAVLProofAgainstAppHash(resp.ActiveParticipants.CreatedAtBlockHeight, appHash, resp.ProofOps.Ops, value); err != nil {
-			return nil, err
+			return nil, 0, 0, err
 		}
 	}
 
 	if resp.ValidatorsProof == nil {
-		return nil, ErrEmptyValidatorsProof
+		return nil, 0, 0, ErrEmptyValidatorsProof
 	}
 
 	participantsN := make(map[string]struct{})
@@ -81,22 +89,22 @@ func verifyParticipants(resp contracts.ActiveParticipantWithProof, validatorsNpl
 	}
 
 	if len(validatorsNplus1) != 0 {
-		for _, pubkey := range validatorsNplus1 {
-			if _, ok := participantsN[pubkey]; !ok {
-				return nil, errors.New("validator not found in previous epoch active participants set")
+		for _, commit := range validatorsNplus1 {
+			if _, ok := participantsN[commit.ValidatorPubKey]; !ok {
+				totalVotedPower = totalVotedPower - commit.VotingPower
 			}
 		}
 	}
 
-	validatorsData := make(map[string]string)
+	validatorsData := make(map[string]*contracts.CommitInfo)
 	for _, commit := range resp.BlockProof.Commits {
-		validatorsData[strings.ToUpper(commit.ValidatorAddress)] = commit.ValidatorPubKey // public key is case-sensitive,
+		validatorsData[strings.ToUpper(commit.ValidatorAddress)] = commit
 	}
 
 	if err := VerifySignatures(*resp.ValidatorsProof, resp.ChainId, validatorsData); err != nil {
-		return nil, err
+		return nil, 0, 0, err
 	}
-	return validatorsData, nil
+	return validatorsData, resp.BlockProof.TotalPower, resp.BlockProof.TotalVotedPower, nil
 }
 
 // VerifyIAVLProofAgainstAppHash verifies the correctness of an ABCIQuery response for ActiveParticipants.
@@ -181,12 +189,12 @@ func VerifySignatures(validatorsProof contracts.ValidatorsProof, chainId string,
 		vote.Timestamp = signature.Timestamp
 		signBytes := tmtypes.VoteSignBytes(chainId, &vote)
 
-		pubKeyBase64, ok := validators[signature.ValidatorAddressHex]
+		commit, ok := validators[signature.ValidatorAddressHex]
 		if !ok {
 			return fmt.Errorf("no pubkey known for validator %v", signature.ValidatorAddressHex)
 		}
 
-		pubKeyBytes, err := base64.StdEncoding.DecodeString(pubKeyBase64)
+		pubKeyBytes, err := base64.StdEncoding.DecodeString(commit.ValidatorPubKey)
 		if err != nil {
 			return fmt.Errorf("decode pubkey: %w", err)
 		}
