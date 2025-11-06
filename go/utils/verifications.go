@@ -185,10 +185,21 @@ func VerifySignatures(validatorsProof contracts.ValidatorsProof, chainId string,
 		},
 	}
 
+	uniqueSignatures := make(map[string]struct{})
+
 	for _, signature := range validatorsProof.Signatures {
+		if signature.SignatureBase64 == "" {
+			// really seldom corner case, when empty signature is in the LastCommit block structure as here http://204.12.168.157:26657/block?height=565617
+			continue
+		}
+
+		if _, ok := uniqueSignatures[signature.SignatureBase64]; ok {
+			return errors.New("duplicated signature")
+		}
+
+		uniqueSignatures[signature.SignatureBase64] = struct{}{}
 		vote.Timestamp = signature.Timestamp
 		signBytes := tmtypes.VoteSignBytes(chainId, &vote)
-
 		commit, ok := validators[signature.ValidatorAddressHex]
 		if !ok {
 			return fmt.Errorf("no pubkey known for validator %v", signature.ValidatorAddressHex)
