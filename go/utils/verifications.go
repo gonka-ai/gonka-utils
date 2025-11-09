@@ -62,7 +62,7 @@ func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParti
 func verifyParticipants(
 	resp contracts.ActiveParticipantWithProof,
 	validatorsNplus1 map[string]*contracts.CommitInfo,
-	totalPowerNPlus1, totalVotedPower int64) (map[string]*contracts.CommitInfo, int64, int64, error) {
+	totalPowerNPlus1, totalVotedPowerNPlus1 int64) (map[string]*contracts.CommitInfo, int64, int64, error) {
 	value, err := hex.DecodeString(resp.ActiveParticipantsBytes)
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("failed to decode active participants bytes : %w", err)
@@ -91,9 +91,15 @@ func verifyParticipants(
 	if len(validatorsNplus1) != 0 {
 		for _, commit := range validatorsNplus1 {
 			if _, ok := participantsN[commit.ValidatorPubKey]; !ok {
-				totalVotedPower = totalVotedPower - commit.VotingPower
+				totalVotedPowerNPlus1 = totalVotedPowerNPlus1 - commit.VotingPower
 			}
 		}
+	}
+
+	minPowerNeeded := totalPowerNPlus1 / 100 * 51
+
+	if totalVotedPowerNPlus1 < minPowerNeeded {
+		return nil, 0, 0, errors.New("not enough voting power")
 	}
 
 	validatorsData := make(map[string]*contracts.CommitInfo)
