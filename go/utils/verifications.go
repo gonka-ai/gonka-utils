@@ -110,8 +110,7 @@ func verifyParticipants(
 }
 
 func IsEnoughPower(totalPower, totalVotedPower int64) bool {
-	minPowerNeeded := totalPower / 100 * 51
-	return totalVotedPower < minPowerNeeded
+	return float64(totalVotedPower) >= float64(totalPower)*0.51
 }
 
 // VerifyIAVLProofAgainstAppHash verifies the correctness of an ABCIQuery response for ActiveParticipants.
