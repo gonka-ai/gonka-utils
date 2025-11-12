@@ -28,9 +28,8 @@ var (
 
 func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParticipants GetParticipantsFn, epoch string) error {
 	var (
-		validatorsNplus1                map[string]*contracts.CommitInfo
-		totalvalidatorsPowerNplus1      int64
-		totalVotedValidatorsPowerNplus1 int64
+		validatorsNplus1           map[string]*contracts.CommitInfo
+		totalvalidatorsPowerNplus1 int64
 	)
 	resp, err := getParticipants(ctx, epoch)
 	if err != nil {
@@ -38,8 +37,7 @@ func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParti
 	}
 
 	for epochId := int64(resp.ActiveParticipants.EpochId - 1); epochId >= 0; epochId-- {
-		validatorsNplus1, totalvalidatorsPowerNplus1, totalVotedValidatorsPowerNplus1, err =
-			verifyParticipants(*resp, validatorsNplus1, totalvalidatorsPowerNplus1, totalVotedValidatorsPowerNplus1)
+		validatorsNplus1, totalvalidatorsPowerNplus1, err = verifyParticipants(*resp, validatorsNplus1, totalvalidatorsPowerNplus1)
 		if err != nil {
 			return err
 		}
@@ -62,25 +60,25 @@ func VerifyParticipants(ctx context.Context, expectedAppHashHex string, getParti
 func verifyParticipants(
 	resp contracts.ActiveParticipantWithProof,
 	validatorsNplus1 map[string]*contracts.CommitInfo,
-	totalPowerNPlus1, totalVotedPowerNPlus1 int64) (map[string]*contracts.CommitInfo, int64, int64, error) {
+	totalPowerNPlus1 int64) (map[string]*contracts.CommitInfo, int64, error) {
 	value, err := hex.DecodeString(resp.ActiveParticipantsBytes)
 	if err != nil {
-		return nil, 0, 0, fmt.Errorf("failed to decode active participants bytes : %w", err)
+		return nil, 0, fmt.Errorf("failed to decode active participants bytes : %w", err)
 	}
 
 	appHash, err := hex.DecodeString(resp.BlockProof.AppHashHex)
 	if err != nil {
-		return nil, 0, 0, fmt.Errorf("failed to decode active participants app hash hex : %w", err)
+		return nil, 0, fmt.Errorf("failed to decode active participants app hash hex : %w", err)
 	}
 
 	if resp.ProofOps != nil {
 		if err := VerifyIAVLProofAgainstAppHash(resp.ActiveParticipants.CreatedAtBlockHeight, appHash, resp.ProofOps.Ops, value); err != nil {
-			return nil, 0, 0, err
+			return nil, 0, err
 		}
 	}
 
 	if resp.ValidatorsProof == nil {
-		return nil, 0, 0, ErrEmptyValidatorsProof
+		return nil, 0, ErrEmptyValidatorsProof
 	}
 
 	participantsN := make(map[string]struct{})
@@ -88,29 +86,32 @@ func verifyParticipants(
 		participantsN[participant.ValidatorKey] = struct{}{}
 	}
 
+	totalVotedPower := int64(0)
 	if len(validatorsNplus1) != 0 {
 		for _, commit := range validatorsNplus1 {
-			if _, ok := participantsN[commit.ValidatorPubKey]; !ok {
-				totalVotedPowerNPlus1 = totalVotedPowerNPlus1 - commit.VotingPower
+			if _, ok := participantsN[commit.ValidatorPubKey]; ok {
+				totalVotedPower += commit.VotingPower
 			}
 		}
 	}
 
-	minPowerNeeded := totalPowerNPlus1 / 100 * 51
-
-	if totalVotedPowerNPlus1 < minPowerNeeded {
-		return nil, 0, 0, errors.New("not enough voting power")
+	if !IsEnoughPower(totalPowerNPlus1, totalVotedPower) {
+		return nil, 0, errors.New("not enough voting power")
 	}
 
 	validatorsData := make(map[string]*contracts.CommitInfo)
 	for _, commit := range resp.BlockProof.Commits {
 		validatorsData[strings.ToUpper(commit.ValidatorAddress)] = commit
 	}
-
 	if err := VerifySignatures(*resp.ValidatorsProof, resp.ChainId, validatorsData); err != nil {
-		return nil, 0, 0, err
+		return nil, 0, err
 	}
-	return validatorsData, resp.BlockProof.TotalPower, resp.BlockProof.TotalVotedPower, nil
+	return validatorsData, resp.BlockProof.TotalPower, nil
+}
+
+func IsEnoughPower(totalPower, totalVotedPower int64) bool {
+	minPowerNeeded := totalPower / 100 * 51
+	return totalVotedPower < minPowerNeeded
 }
 
 // VerifyIAVLProofAgainstAppHash verifies the correctness of an ABCIQuery response for ActiveParticipants.
